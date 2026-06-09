@@ -378,25 +378,22 @@ async function submitOnlineAnswer(correct, elapsed) {
   const oppKey = myKey === 'player1' ? 'player2' : 'player1';
 
   if (correct) {
-    document.getElementById('onlineFeedback').textContent = `✅ 정답! ${elapsed.toFixed(1)}초 — 상대 답변 대기 중...`;
+    document.getElementById('onlineFeedback').textContent = `✅ 정답! ${elapsed.toFixed(1)}초`;
     document.getElementById('onlineFeedback').className   = 'online-feedback correct';
   } else {
-    document.getElementById('onlineFeedback').textContent = '❌ 오답... 상대 답변 대기 중';
+    document.getElementById('onlineFeedback').textContent = '❌ 오답...';
     document.getElementById('onlineFeedback').className   = 'online-feedback wrong';
   }
 
-  // 내 답변 Firebase에 기록 (시간 포함)
+  // 내 답변 Firebase에 기록
   await onlinePvp.roomRef.update({
     [`${myKey}Answered`]: true,
     [`${myKey}Correct`]:  correct,
-    [`${myKey}Time`]:     correct ? elapsed : 9999,  // 오답은 9999초로 처리
+    [`${myKey}Time`]:     correct ? elapsed : 9999,
   });
 
-  // 내가 정답이고 player1이면 타임아웃 내 상대 미응답 시 강제 진행
-  if (correct && onlinePvp.playerId === 'player1') {
-    const oppKey = 'player2';
-    scheduleNextQuestion(myKey, oppKey);
-  }
+  // 정답 여부와 상관없이: 내가 답한 뒤 일정 시간 후 상대 미응답이면 강제 판정 (양쪽 모두 스케줄)
+  scheduleForceResolve(myKey, oppKey);
 }
 
 // ─── 방 업데이트 처리 ─────────────────────────────────────────────────────
@@ -435,14 +432,15 @@ function handleRoomUpdate(room) {
   const myAnswered  = room[`${myKey}Answered`];
   const oppAnswered = room[`${oppKey}Answered`];
 
-  // ── 상대가 먼저 정답 → 내가 아직 안 답했으면 자동 패스 처리 ──
+  // ── 상대가 먼저 정답 → 내 타이머 멈추고 자동 패스 등록 ──
   if (!myAnswered && oppAnswered && room[`${oppKey}Correct`] && !onlinePvp._waitingNext) {
     onlinePvp._waitingNext = true;
-    document.getElementById('onlineFeedback').textContent = '😤 상대가 먼저 정답! 잠시 후 다음 문제...';
+    document.getElementById('onlineFeedback').textContent = '😤 상대가 먼저 정답!';
     document.getElementById('onlineFeedback').className   = 'online-feedback wrong';
     if (!onlinePvp.answered) {
       onlinePvp.answered = true;
       stopOnlineTimer();
+      // 패스 등록 → 이 업데이트가 다시 Firebase에 전파되어 둘 다 answered → resolveQuestion 진행
       onlinePvp.roomRef.update({
         [`${myKey}Answered`]: true,
         [`${myKey}Correct`]:  false,
@@ -452,9 +450,10 @@ function handleRoomUpdate(room) {
     return;
   }
 
-  // ── 둘 다 답했으면 player1이 최종 판정 ──
+  // ── 둘 다 답했으면 → 양쪽에서 판정 시도, 중복 방지는 Firebase 트랜잭션 대신 _waitingNext 플래그로 ──
   if (myAnswered && oppAnswered && !onlinePvp._waitingNext) {
     onlinePvp._waitingNext = true;
+    // player1이 판정 주체 (player2는 currentQ 변화로 다음 문제 수신)
     if (onlinePvp.playerId === 'player1') {
       resolveQuestion(room, myKey, oppKey);
     }
@@ -515,27 +514,38 @@ async function resolveQuestion(room, myKey, oppKey) {
   await onlinePvp.roomRef.update(updates);
 }
 
-// 다음 문제 전환 스케줄 (내가 먼저 정답 낸 경우 상대 응답 대기 후 강제 진행)
-function scheduleNextQuestion(myKey, oppKey) {
+// 상대 미응답 시 강제 판정 (양쪽 모두 스케줄, player1만 실제 판정 실행)
+function scheduleForceResolve(myKey, oppKey) {
+  const qIdx = onlinePvp.currentQuestionIdx; // 스케줄 시점의 문제 번호 캡처
   setTimeout(async () => {
-    if (onlinePvp.playerId !== 'player1') return;
+    // 이미 다음 문제로 넘어갔으면 무시
+    if (onlinePvp.currentQuestionIdx !== qIdx) return;
     const snap = await onlinePvp.roomRef.once('value');
     const room = snap.val();
     if (!room || room.status !== 'playing') return;
-    // 아직 판정 안 됐으면 지금 판정
-    if (!(room[`${myKey}Answered`] && room[`${oppKey}Answered`])) {
-      // 상대가 아직 안 답했으면 패스로 채워서 판정
-      await onlinePvp.roomRef.update({
-        [`${oppKey}Answered`]: true,
-        [`${oppKey}Correct`]:  false,
-        [`${oppKey}Time`]:     9999,
-      });
+    // currentQ가 이미 증가했으면 (다른 쪽이 이미 판정) 무시
+    if ((room.currentQ ?? 0) > qIdx) return;
+
+    // 상대가 아직 안 답했으면 패스 처리 (player1만 실행)
+    if (onlinePvp.playerId === 'player1') {
+      const updates = {};
+      if (!room[`${oppKey}Answered`]) {
+        updates[`${oppKey}Answered`] = true;
+        updates[`${oppKey}Correct`]  = false;
+        updates[`${oppKey}Time`]     = 9999;
+      }
+      if (!room[`${myKey}Answered`]) {
+        updates[`${myKey}Answered`] = true;
+        updates[`${myKey}Correct`]  = false;
+        updates[`${myKey}Time`]     = 9999;
+      }
+      if (Object.keys(updates).length) {
+        await onlinePvp.roomRef.update(updates);
+      }
+      const freshSnap = await onlinePvp.roomRef.once('value');
+      await resolveQuestion(freshSnap.val(), myKey, oppKey);
     }
-    await resolveQuestion(
-      (await onlinePvp.roomRef.once('value')).val(),
-      myKey, oppKey
-    );
-  }, 2500);
+  }, 3000); // 3초 대기 후 강제 판정
 }
 
 // ─── UI 업데이트 ──────────────────────────────────────────────────────────
@@ -565,7 +575,9 @@ function useOnlineHint() {
 }
 
 // ─── 랭킹 저장 ────────────────────────────────────────────────────────────
-async function saveWinToRanking(nickname) {
+async function saveWinToRanking() {
+  const nickname = onlinePvp.nickname;
+  if (!nickname) { console.warn('닉네임 없음, 랭킹 저장 스킵'); return; }
   const safeKey = nickname.replace(/[.#$[\]/]/g, '_');
   const ref = db.ref(`rankings/${safeKey}`);
   try {
@@ -574,7 +586,7 @@ async function saveWinToRanking(nickname) {
     if (cur) {
       await ref.update({ wins: (cur.wins || 0) + 1, lastWin: Date.now() });
     } else {
-      await ref.set({ nickname, wins: 1, lastWin: Date.now() });
+      await ref.set({ nickname: nickname, wins: 1, lastWin: Date.now() });
     }
   } catch(e) { console.warn('랭킹 저장 실패', e); }
 }
@@ -610,7 +622,7 @@ async function loadRanking() {
 async function showOnlineResult(result) {
   // 승리면 랭킹 저장 먼저
   if (result === 'win') {
-    await saveWinToRanking(onlinePvp.nickname);
+    await saveWinToRanking();
   }
 
   showScreen('onlineResultScreen');
