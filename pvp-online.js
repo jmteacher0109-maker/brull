@@ -97,29 +97,28 @@ async function enterMatchmaking() {
   document.getElementById('matchmakingStatus').textContent = '🔍 상대를 찾는 중...';
   document.getElementById('matchmakingNick').textContent = `${onlinePvp.character.emoji} ${nick}`;
 
-  const waitingRef = db.ref('waiting');
+  // ★ 버그1 수정: 난이도별로 독립된 대기열 사용
+  const diff = gameState.difficulty || 'easy';
+  const waitingRef = db.ref(`waiting_${diff}`);
 
   try {
-    // 대기 중인 방이 있는지 확인
     const snapshot = await waitingRef.once('value');
-    const waiting = snapshot.val();
+    const waiting  = snapshot.val();
 
     if (waiting) {
-      // 기존 대기방 참여 (player2)
+      // ── player2: 기존 대기방 참여 ──
       const roomId = Object.keys(waiting)[0];
-      const roomData = waiting[roomId];
 
-      onlinePvp.roomId = roomId;
+      onlinePvp.roomId  = roomId;
       onlinePvp.playerId = 'player2';
-      onlinePvp.roomRef = db.ref(`rooms/${roomId}`);
+      onlinePvp.roomRef  = db.ref(`rooms/${roomId}`);
 
-      // 대기 목록에서 제거
-      await db.ref(`waiting/${roomId}`).remove();
+      // 대기 목록에서 즉시 제거 (다른 player2가 같은 방에 못 들어오게)
+      await db.ref(`waiting_${diff}/${roomId}`).remove();
 
-      // 문제 목록 생성 (player2가 담당)
+      // 문제 목록 생성 (player2 담당)
       const questions = pickOnlineQuestions();
 
-      // 방 업데이트: player2 참여 + 문제 세팅 + 상태 변경
       await onlinePvp.roomRef.update({
         player2: {
           nickname: nick,
@@ -127,7 +126,11 @@ async function enterMatchmaking() {
           characterId: onlinePvp.character.id,
           correct: 0,
         },
-        questions: questions.map(q => ({ text: q.text, answer: q.answer, topic: q.topic, hint: q.hint, choices: q.choices || null })),
+        questions: questions.map(q => ({
+          text: q.text, answer: q.answer,
+          topic: q.topic, hint: q.hint,
+          choices: q.choices || null,
+        })),
         status: 'playing',
         currentQ: 0,
         player1Answered: false,
@@ -136,12 +139,22 @@ async function enterMatchmaking() {
         player2Time: null,
       });
 
+      setupDisconnectCleanup(diff);
+
+      // ★ player2는 방 업데이트 완료 후 바로 게임 시작
+      const roomSnap = await onlinePvp.roomRef.once('value');
+      const room = roomSnap.val();
+      onlinePvp._gameStarted = true;
+      startOnlineGame(room);
+      // 게임 진행 리스너 연결
+      listenGameRoom();
+
     } else {
-      // 새 방 생성 (player1)
+      // ── player1: 새 방 생성 후 상대 대기 ──
       const roomId = genRoomId();
-      onlinePvp.roomId = roomId;
+      onlinePvp.roomId  = roomId;
       onlinePvp.playerId = 'player1';
-      onlinePvp.roomRef = db.ref(`rooms/${roomId}`);
+      onlinePvp.roomRef  = db.ref(`rooms/${roomId}`);
 
       await onlinePvp.roomRef.set({
         player1: {
@@ -151,21 +164,16 @@ async function enterMatchmaking() {
           correct: 0,
         },
         status: 'waiting',
+        difficulty: diff,
         createdAt: Date.now(),
       });
 
-      // 대기 목록에 추가
-      await db.ref(`waiting/${roomId}`).set({ createdAt: Date.now() });
+      await db.ref(`waiting_${diff}/${roomId}`).set({ createdAt: Date.now() });
 
-      // 방 상태 변화 감지 (상대가 들어올 때까지 대기)
-      waitForOpponent();
+      setupDisconnectCleanup(diff);
+      // ★ 버그2 수정: player1은 상대 입장 대기 리스너 → 게임 시작 후 게임 리스너로 교체
+      listenForMatchThenGame();
     }
-
-    // 방 리스너 연결
-    listenRoom();
-
-    // 연결 해제 시 정리
-    setupDisconnectCleanup();
 
   } catch (err) {
     console.error(err);
@@ -174,32 +182,51 @@ async function enterMatchmaking() {
   }
 }
 
-function waitForOpponent() {
-  const ref = onlinePvp.roomRef.child('status');
-  const handler = ref.on('value', snap => {
-    if (snap.val() === 'playing') {
-      ref.off('value', handler);
-    }
-  });
-}
-
-function setupDisconnectCleanup() {
-  // 연결 끊기면 방 삭제
+function setupDisconnectCleanup(diff) {
   if (onlinePvp.playerId === 'player1') {
-    db.ref(`waiting/${onlinePvp.roomId}`).onDisconnect().remove();
+    db.ref(`waiting_${diff}/${onlinePvp.roomId}`).onDisconnect().remove();
   }
   onlinePvp.roomRef.onDisconnect().update({ status: 'disconnected' });
 }
 
-// ─── 방 상태 실시간 감지 ──────────────────────────────────────────────────
-function listenRoom() {
+// ★ 버그2 수정 핵심: player1 전용 - 매칭 대기만 감지, 게임 시작되면 리스너 교체
+function listenForMatchThenGame() {
+  const ref = onlinePvp.roomRef.child('status');
+
+  const handler = ref.on('value', snap => {
+    const status = snap.val();
+    if (status === 'playing') {
+      // 매칭 완료 → 이 리스너 즉시 해제
+      ref.off('value', handler);
+
+      // 방 전체 정보 한 번 읽어서 게임 시작
+      onlinePvp.roomRef.once('value').then(roomSnap => {
+        const room = roomSnap.val();
+        if (room && room.questions) {
+          onlinePvp._gameStarted = true;
+          startOnlineGame(room);
+          // 게임 진행 리스너 새로 연결
+          listenGameRoom();
+        }
+      });
+    } else if (status === 'disconnected') {
+      ref.off('value', handler);
+      showOnlineResult('disconnect');
+    }
+  });
+
+  // 취소 가능하도록 등록
+  onlinePvp.unsubscribes.push(() => ref.off('value', handler));
+}
+
+// ★ 버그2 수정 핵심: 게임 진행 중 업데이트만 처리하는 리스너 (매칭 화면 절대 안 띄움)
+function listenGameRoom() {
   const ref = onlinePvp.roomRef;
 
   const handler = ref.on('value', snap => {
     const room = snap.val();
     if (!room) return;
 
-    // 상대방 연결 해제
     if (room.status === 'disconnected') {
       stopOnlineTimer();
       clearOnlineListeners();
@@ -207,14 +234,12 @@ function listenRoom() {
       return;
     }
 
-    // 두 플레이어 모두 입장 → 게임 시작
-    if (room.status === 'playing' && room.questions && !onlinePvp._gameStarted) {
-      onlinePvp._gameStarted = true;
-      startOnlineGame(room);
+    if (room.status === 'finished') {
+      // handleRoomUpdate 에서도 처리하지만 여기서 한 번 더 보장
+      handleRoomUpdate(room);
       return;
     }
 
-    // 게임 진행 중: 문제 번호나 정답 상태 변화 처리
     if (room.status === 'playing' && onlinePvp._gameStarted) {
       handleRoomUpdate(room);
     }
@@ -600,7 +625,8 @@ function initOnlinePvpEvents() {
   document.getElementById('rankingRefreshBtn').addEventListener('click', loadRanking);
   document.getElementById('cancelMatchBtn').addEventListener('click', async () => {
     if (onlinePvp.roomId) {
-      await db.ref(`waiting/${onlinePvp.roomId}`).remove();
+      const diff = gameState.difficulty || 'easy';
+      await db.ref(`waiting_${diff}/${onlinePvp.roomId}`).remove();
       await onlinePvp.roomRef?.remove();
     }
     clearOnlineListeners();
