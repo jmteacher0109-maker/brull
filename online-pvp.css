@@ -1,0 +1,350 @@
+/* ============================================================
+   브롤스튜던츠 - 온라인 PvP 추가 스타일 (online-pvp.css)
+   기존 style.css 에 이어서 적용
+   ============================================================ */
+
+/* ─── 공통 버튼 ─────────────────────────────────────────────── */
+.online-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 28px;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s;
+  font-family: inherit;
+}
+.online-btn:active { transform: scale(.96); }
+.online-btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+
+.online-btn-primary {
+  background: linear-gradient(135deg, #ff3d8b, #ff6b35);
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(255,61,139,.45);
+}
+.online-btn-secondary {
+  background: rgba(255,255,255,.1);
+  color: #fff;
+  border: 1.5px solid rgba(255,255,255,.25);
+}
+.online-btn-danger {
+  background: rgba(255,80,80,.15);
+  color: #ff5050;
+  border: 1.5px solid rgba(255,80,80,.3);
+}
+
+/* ─── 로비 화면 ──────────────────────────────────────────────── */
+#onlineLobbyScreen {
+  padding: 24px 20px 40px;
+}
+.lobby-title {
+  text-align: center;
+  font-size: 26px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #ff3d8b, #00d4ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 6px;
+}
+.lobby-subtitle {
+  text-align: center;
+  color: rgba(255,255,255,.55);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+.lobby-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,.6);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin: 20px 0 8px;
+}
+.lobby-nick-input {
+  width: 100%;
+  background: rgba(255,255,255,.08);
+  border: 1.5px solid rgba(255,255,255,.2);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 14px 18px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color .2s;
+  font-family: inherit;
+}
+.lobby-nick-input:focus { border-color: #ff3d8b; }
+.lobby-nick-input::placeholder { color: rgba(255,255,255,.3); }
+
+/* 캐릭터 그리드 (로비용 컴팩트) */
+.lobby-char-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.lobby-char-card {
+  background: rgba(255,255,255,.07);
+  border: 1.5px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .18s;
+}
+.lobby-char-card:hover { background: rgba(255,255,255,.12); transform: translateY(-2px); }
+.lobby-char-card.selected {
+  border-color: #ff3d8b;
+  background: rgba(255,61,139,.18);
+  box-shadow: 0 0 20px rgba(255,61,139,.35);
+}
+.lobby-char-emoji { font-size: 28px; display: block; margin-bottom: 4px; }
+.lobby-char-name  { font-size: 13px; font-weight: 700; color: #fff; }
+.lobby-char-power { font-size: 10px; color: rgba(255,255,255,.5); margin-top: 3px; line-height: 1.3; }
+
+/* ─── 매칭 화면 ──────────────────────────────────────────────── */
+#matchmakingScreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 70vh;
+  gap: 24px;
+  padding: 40px 20px;
+}
+.matching-spinner {
+  width: 72px;
+  height: 72px;
+  border: 6px solid rgba(255,255,255,.12);
+  border-top-color: #ff3d8b;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.matching-my-card {
+  background: rgba(255,255,255,.08);
+  border: 1.5px solid rgba(255,255,255,.18);
+  border-radius: 20px;
+  padding: 20px 36px;
+  text-align: center;
+}
+.matching-my-nick { font-size: 22px; font-weight: 900; color: #fff; }
+#matchmakingStatus { font-size: 15px; color: rgba(255,255,255,.7); font-weight: 600; }
+
+/* ─── 대전 화면 ──────────────────────────────────────────────── */
+#onlineBattleScreen {
+  padding: 16px 16px 32px;
+  position: relative;
+}
+
+/* 카운트다운 오버레이 */
+#onlineCountdown {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.75);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.countdown-label  { color: rgba(255,255,255,.7); font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+.countdown-number {
+  font-size: 96px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #ff3d8b, #ff6b35);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: countPulse .9s ease-out infinite;
+}
+@keyframes countPulse {
+  0%  { transform: scale(1.1); }
+  50% { transform: scale(0.9); }
+  100%{ transform: scale(1.1); }
+}
+
+/* 상단 플레이어 대결 패널 */
+.online-players-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.online-player-card {
+  flex: 1;
+  background: rgba(255,255,255,.07);
+  border: 1.5px solid rgba(255,255,255,.14);
+  border-radius: 16px;
+  padding: 12px;
+  text-align: center;
+}
+.online-player-card.me   { border-color: #3ddc84; }
+.online-player-card.opp  { border-color: #ff3d8b; }
+
+.op-emoji   { font-size: 32px; display: block; }
+.op-nick    { font-size: 13px; font-weight: 700; color: #fff; margin: 4px 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.op-score   { font-size: 18px; font-weight: 900; color: #fff; }
+
+.op-score-bar-wrap {
+  height: 6px;
+  background: rgba(255,255,255,.1);
+  border-radius: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.op-score-bar { height: 100%; border-radius: 3px; transition: width .4s; width: 0%; }
+.me  .op-score-bar { background: linear-gradient(90deg, #3ddc84, #00d4ff); }
+.opp .op-score-bar { background: linear-gradient(90deg, #ff3d8b, #ff6b35); }
+
+.vs-badge {
+  font-size: 18px;
+  font-weight: 900;
+  color: rgba(255,255,255,.6);
+  flex-shrink: 0;
+}
+
+/* 타이머 */
+.online-timer-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.online-timer-val {
+  font-size: 28px;
+  font-weight: 900;
+  color: #00d4ff;
+  min-width: 60px;
+  text-align: center;
+}
+
+/* 문제 카드 */
+.online-question-card {
+  background: rgba(255,255,255,.07);
+  border: 1.5px solid rgba(255,255,255,.12);
+  border-radius: 18px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.online-q-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.online-q-num   { font-size: 12px; color: rgba(255,255,255,.5); font-weight: 700; }
+.online-q-topic {
+  font-size: 11px;
+  background: rgba(255,61,139,.2);
+  color: #ff3d8b;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-weight: 700;
+}
+.online-q-text {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.45;
+  text-align: center;
+}
+
+/* 피드백 */
+.online-feedback {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: rgba(255,255,255,.65);
+  margin: 10px 0;
+  min-height: 24px;
+  transition: color .2s;
+}
+.online-feedback.correct { color: #3ddc84; }
+.online-feedback.wrong   { color: #ff5050; }
+
+/* 입력 영역 */
+.online-answer-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.online-answer-input {
+  flex: 1;
+  min-width: 140px;
+  background: rgba(255,255,255,.1);
+  border: 1.5px solid rgba(255,255,255,.2);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  padding: 13px 18px;
+  outline: none;
+  text-align: center;
+  font-family: inherit;
+  transition: border-color .2s;
+}
+.online-answer-input:focus { border-color: #ff3d8b; }
+.online-answer-input::placeholder { color: rgba(255,255,255,.3); }
+
+/* 액션 버튼 행 */
+.online-action-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.online-action-row .online-btn { flex: 1; }
+
+/* ─── 결과 화면 ──────────────────────────────────────────────── */
+#onlineResultScreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 20px;
+  gap: 16px;
+}
+.online-result-emoji { font-size: 72px; }
+.online-result-title {
+  font-size: 36px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #ff3d8b, #ff6b35);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.online-result-sub   { font-size: 16px; color: rgba(255,255,255,.65); font-weight: 600; }
+
+.online-score-board {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  max-width: 320px;
+}
+.score-board-card {
+  flex: 1;
+  background: rgba(255,255,255,.07);
+  border: 1.5px solid rgba(255,255,255,.14);
+  border-radius: 16px;
+  padding: 16px;
+  text-align: center;
+}
+.score-board-label { font-size: 12px; color: rgba(255,255,255,.5); font-weight: 700; margin-bottom: 6px; }
+.score-board-val   { font-size: 32px; font-weight: 900; color: #fff; }
+
+.online-result-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 320px;
+}
