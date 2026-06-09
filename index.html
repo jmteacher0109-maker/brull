@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>브롤스튜던츠 - 학습 게임</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="online-pvp.css">
+</head>
+<body>
+
+<div class="container">
+
+<!-- ============= 시작 화면 ============= -->
+<div id="startScreen" class="screen active">
+  <div class="title-wrap">
+    <h1 class="game-title">브롤스튜던츠</h1>
+    <p class="subtitle"><span id="packTitle">분수 덧셈</span> 챌린지</p>
+  </div>
+
+  <!-- 게임 모드 선택 -->
+  <div class="mode-section">
+    <p class="section-label">게임 모드</p>
+    <div class="mode-grid" id="modeGrid"></div>
+  </div>
+
+  <!-- 캐릭터 선택 (오프라인 모드용) -->
+  <div class="character-section" id="offlineCharSection">
+    <p class="section-label">브롤러 선택</p>
+    <div class="player-turn-indicator" id="charTurnIndicator"></div>
+    <div class="character-grid" id="characterGrid"></div>
+  </div>
+
+  <!-- 난이도 선택 -->
+  <div class="difficulty-section">
+    <p class="section-label">난이도</p>
+    <div class="difficulty-grid" id="difficultyGrid"></div>
+  </div>
+
+  <button class="start-btn" id="startBtn" disabled>배틀 시작!</button>
+</div>
+
+<!-- ============= 모험 모드 ============= -->
+<div id="adventureScreen" class="screen">
+  <div class="game-header">
+    <div class="player-info">
+      <div class="player-avatar" id="playerAvatar">😎</div>
+      <div>
+        <div class="player-name-display" id="playerNameDisplay">브롤러</div>
+        <div class="player-level">🎮 <span id="stageInfo">스테이지 1/5</span></div>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div class="header-stat combo">
+        <div class="label">🔥 콤보</div>
+        <div class="value" id="advCombo">0</div>
+      </div>
+      <div class="header-stat timer" id="advQuestionTimerStat">
+        <div class="label">⏱ 시간</div>
+        <div class="value" id="advQuestionTimer">15.0</div>
+      </div>
+      <div class="header-stat score">
+        <div class="label">⭐ 점수</div>
+        <div class="value" id="scoreValue">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="progress-bar" id="progressBar"></div>
+
+  <div class="hp-section">
+    <div class="hp-label">
+      <span>❤️ 내 체력</span>
+      <span id="hpText">100 / 100</span>
+    </div>
+    <div class="hp-bar-wrap">
+      <div class="hp-bar" id="playerHpBar" style="width: 100%;"></div>
+    </div>
+  </div>
+
+  <div class="enemy-arena">
+    <div class="enemy-label">⚡ 적 등장!</div>
+    <div class="enemy-character" id="enemyChar">👾</div>
+    <div class="enemy-name" id="enemyName">보스</div>
+    <div class="enemy-hp-wrap">
+      <div class="enemy-hp-bar" id="enemyHpBar" style="width: 100%;"></div>
+    </div>
+    <div id="damageContainer"></div>
+  </div>
+
+  <div class="question-card">
+    <span class="question-number" id="questionNum">문제 1</span>
+    <span class="question-topic" id="questionTopic">주제</span>
+    <div class="question-text" id="questionText">문제가 여기 표시됩니다</div>
+  </div>
+
+  <div class="answer-section">
+    <p class="answer-label">✏️ 답을 입력하세요</p>
+    <div class="answer-input-wrap" id="answerInputWrap">
+      <input type="text" class="answer-input" id="answerInput" placeholder="답" autocomplete="off">
+    </div>
+  </div>
+
+  <div class="feedback" id="feedback">정답을 입력하고 공격하세요! 💥</div>
+
+  <div class="action-buttons">
+    <button class="action-btn hint-btn" id="hintBtn">💡 힌트</button>
+    <button class="action-btn attack-btn" id="attackBtn">⚔️ 공격!</button>
+  </div>
+
+  <div style="text-align:center; margin-top: 16px;">
+    <button class="quit-btn" id="quitBtn">🚪 메인으로</button>
+  </div>
+</div>
+
+<!-- ============= 오프라인 결과 화면 ============= -->
+<div id="resultScreen" class="screen">
+  <div class="result-screen">
+    <div class="result-emoji" id="resultEmoji">🏆</div>
+    <h1 class="result-title" id="resultTitle">승리!</h1>
+    <p class="result-subtitle" id="resultSubtitle">진정한 챔피언!</p>
+
+    <div class="stat-card">
+      <div class="stat-label">⏱ 총 시간</div>
+      <div class="stat-value" id="finalTime">00:00</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">⭐ 점수</div>
+      <div class="stat-value" id="finalScore">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">🔥 최고 콤보</div>
+      <div class="stat-value" id="finalMaxCombo">0</div>
+    </div>
+
+    <button class="start-btn" id="restartBtn" style="margin-top: 30px;">다시 도전!</button>
+  </div>
+</div>
+
+<!-- ============= 온라인 PvP: 로비 화면 ============= -->
+<div id="onlineLobbyScreen" class="screen">
+  <h2 class="lobby-title">🌐 온라인 배틀</h2>
+  <p class="lobby-subtitle">전국 브롤러와 실시간 대결!</p>
+
+  <p class="lobby-label">닉네임</p>
+  <input type="text" class="lobby-nick-input" id="lobbyNickname"
+         placeholder="닉네임을 입력하세요" maxlength="10" autocomplete="off">
+
+  <p class="lobby-label">브롤러 선택</p>
+  <div class="lobby-char-grid" id="lobbyCharGrid"></div>
+
+  <div style="margin-top: 28px; display: flex; flex-direction: column; gap: 10px;">
+    <button class="online-btn online-btn-primary" id="lobbyStartBtn" disabled style="width:100%; padding: 16px;">
+      🔍 배틀 매칭 시작
+    </button>
+    <button class="online-btn online-btn-secondary" id="lobbyBackBtn" style="width:100%;">
+      ← 돌아가기
+    </button>
+  </div>
+</div>
+
+<!-- ============= 온라인 PvP: 매칭 대기 화면 ============= -->
+<div id="matchmakingScreen" class="screen">
+  <div class="matching-spinner"></div>
+  <p id="matchmakingStatus" style="font-size:18px; font-weight:800; color:#fff;">🔍 상대를 찾는 중...</p>
+  <div class="matching-my-card">
+    <div id="matchmakingNick" style="font-size:22px; font-weight:900; color:#fff;">나</div>
+    <div style="font-size:12px; color:rgba(255,255,255,.5); margin-top:4px;">대기 중</div>
+  </div>
+  <p style="font-size:13px; color:rgba(255,255,255,.4); text-align:center;">
+    같은 난이도의 상대를 찾고 있어요<br>잠시만 기다려주세요!
+  </p>
+  <button class="online-btn online-btn-danger" id="cancelMatchBtn" style="width: 200px;">
+    ✕ 매칭 취소
+  </button>
+</div>
+
+<!-- ============= 온라인 PvP: 대전 화면 ============= -->
+<div id="onlineBattleScreen" class="screen">
+
+  <!-- 카운트다운 오버레이 -->
+  <div id="onlineCountdown" style="display:none;">
+    <div class="countdown-label">준비하세요!</div>
+    <div class="countdown-number">3</div>
+  </div>
+
+  <!-- 플레이어 패널 -->
+  <div class="online-players-panel">
+    <div class="online-player-card me">
+      <span class="op-emoji" id="onlineMyEmoji">❓</span>
+      <div class="op-nick"  id="onlineMyNick">나</div>
+      <div class="op-score" id="onlineMyScore">0 / 3</div>
+      <div class="op-score-bar-wrap">
+        <div class="op-score-bar" id="onlineMyBar"></div>
+      </div>
+    </div>
+
+    <div class="vs-badge">VS</div>
+
+    <div class="online-player-card opp">
+      <span class="op-emoji" id="onlineOppEmoji">❓</span>
+      <div class="op-nick"  id="onlineOppNick">상대방</div>
+      <div class="op-score" id="onlineOppScore">0 / 3</div>
+      <div class="op-score-bar-wrap">
+        <div class="op-score-bar" id="onlineOppBar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 타이머 -->
+  <div class="online-timer-row">
+    <span style="font-size:14px; color:rgba(255,255,255,.6); font-weight:700;">⏱</span>
+    <span class="online-timer-val" id="onlineTimer">15.0</span>
+    <span style="font-size:14px; color:rgba(255,255,255,.6); font-weight:700;">초</span>
+  </div>
+
+  <!-- 문제 카드 -->
+  <div class="online-question-card">
+    <div class="online-q-meta">
+      <span class="online-q-num"   id="onlineQNum">문제 1 / 5</span>
+      <span class="online-q-topic" id="onlineQTopic">주제</span>
+    </div>
+    <div class="online-q-text" id="onlineQText">문제가 여기 표시됩니다</div>
+  </div>
+
+  <!-- 피드백 -->
+  <div class="online-feedback" id="onlineFeedback">먼저 정답을 맞혀라! ⚡</div>
+
+  <!-- 답 입력 -->
+  <div class="online-answer-wrap" id="onlineAnswerWrap">
+    <input type="text" class="online-answer-input" id="onlineAnswerInput"
+           placeholder="답 입력" autocomplete="off">
+  </div>
+
+  <!-- 버튼 -->
+  <div class="online-action-row">
+    <button class="online-btn online-btn-secondary" id="onlineHintBtn">💡 힌트</button>
+    <button class="online-btn online-btn-primary"   id="onlineAttackBtn">⚡ 제출!</button>
+  </div>
+
+  <div style="text-align:center;">
+    <button class="online-btn online-btn-danger" id="onlineQuitBtn" style="font-size:13px; padding:10px 20px;">
+      🚪 포기
+    </button>
+  </div>
+</div>
+
+<!-- ============= 온라인 PvP: 결과 화면 ============= -->
+<div id="onlineResultScreen" class="screen">
+  <div class="online-result-emoji" id="onlineResultEmoji">🏆</div>
+  <div class="online-result-title" id="onlineResultTitle">승리!</div>
+  <div class="online-result-sub"   id="onlineResultSub">대단해요!</div>
+
+  <div class="online-score-board">
+    <div class="score-board-card">
+      <div class="score-board-label">🙋 나</div>
+      <div class="score-board-val" id="onlineResultMyScore">0</div>
+    </div>
+    <div class="score-board-card">
+      <div class="score-board-label">🤺 상대</div>
+      <div class="score-board-val" id="onlineResultOppScore">0</div>
+    </div>
+  </div>
+
+  <div class="online-result-btns">
+    <button class="online-btn online-btn-primary"   id="onlineResultRematch" style="width:100%; padding:16px;">
+      🔄 다시 매칭
+    </button>
+    <button class="online-btn online-btn-secondary" id="onlineResultHome"    style="width:100%;">
+      🏠 처음으로
+    </button>
+  </div>
+</div>
+
+<!-- 공통 오버레이 -->
+<div class="turn-overlay" id="turnOverlay">
+  <div class="turn-overlay-content">
+    <div class="turn-overlay-emoji" id="turnEmoji">🦸‍♀️</div>
+    <div class="turn-overlay-title" id="turnTitle">PLAYER 1</div>
+    <div class="turn-overlay-subtitle" id="turnSubtitle">차례입니다!</div>
+  </div>
+</div>
+<div class="combo-display" id="comboDisplay"></div>
+
+</div><!-- /.container -->
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<!-- 게임 데이터 & 로직 -->
+<script src="pack.js"></script>
+<script src="game.js"></script>
+<script src="pvp-online.js"></script>
+
+<script>
+// ─── 시작 화면 모드 카드에 온라인 PvP 추가 ─────────────────────────────────
+// game.js의 initStartScreen 을 오버라이드(패치)하여 온라인 배틀 모드 카드 추가
+const _origInitStartScreen = initStartScreen;
+initStartScreen = function () {
+  if (typeof PROBLEM_PACK === 'undefined') { alert('pack.js를 찾을 수 없습니다!'); return; }
+  document.getElementById('packTitle').textContent = PROBLEM_PACK.name;
+
+  // ── 모드 카드 (온라인 배틀 추가) ──
+  const modes = [
+    { id: 'adventure',     name: '모험 모드',    emoji: '🗺️', desc: '1인 · 5스테이지 보스 격파' },
+    { id: 'pvp',           name: '오프라인 배틀', emoji: '⚔️', desc: '2인 · 같은 기기로 대결' },
+    { id: 'online_battle', name: '온라인 배틀',   emoji: '🌐', desc: '실시간 · 전국 브롤러와 대결!' },
+  ];
+  const modeGrid = document.getElementById('modeGrid');
+  modeGrid.innerHTML = modes.map(m => `
+    <div class="mode-card" data-mode="${m.id}">
+      <span class="mode-emoji">${m.emoji}</span>
+      <div class="mode-name">${m.name}</div>
+      <div class="mode-desc">${m.desc}</div>
+    </div>`).join('');
+
+  modeGrid.querySelectorAll('.mode-card').forEach(card => {
+    card.addEventListener('click', () => {
+      modeGrid.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      gameState.mode = card.dataset.mode;
+      gameState.p1Character = null; gameState.p2Character = null;
+
+      // 온라인 배틀이면 캐릭터 섹션 숨김
+      const offlineCharSec = document.getElementById('offlineCharSection');
+      if (gameState.mode === 'online_battle') {
+        offlineCharSec.style.display = 'none';
+      } else {
+        offlineCharSec.style.display = '';
+        updateCharGrid();
+      }
+      checkStartReady();
+    });
+  });
+
+  updateCharGrid();
+
+  // 난이도
+  const diffGrid = document.getElementById('difficultyGrid');
+  diffGrid.innerHTML = DIFFICULTIES.map(d => `
+    <div class="difficulty-card" data-diff="${d.id}" style="--diff-color:${d.color}">
+      <div class="difficulty-icon">${d.icon}</div>
+      <div class="difficulty-info"><h3>${d.name}</h3></div>
+    </div>`).join('');
+  diffGrid.querySelectorAll('.difficulty-card').forEach(card => {
+    card.addEventListener('click', () => {
+      diffGrid.querySelectorAll('.difficulty-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      gameState.difficulty = card.dataset.diff;
+      checkStartReady();
+    });
+  });
+
+  // 시작 버튼: 온라인 배틀이면 로비로 이동
+  document.getElementById('startBtn').addEventListener('click', () => {
+    if (gameState.mode === 'online_battle') {
+      showOnlineLobby();
+    } else {
+      startGame();
+    }
+  });
+};
+
+// checkStartReady 오버라이드: 온라인 배틀은 캐릭터 불필요
+const _origCheckStartReady = checkStartReady;
+checkStartReady = function () {
+  const btn = document.getElementById('startBtn');
+  if (gameState.mode === 'online_battle') {
+    btn.disabled = !gameState.difficulty;
+  } else {
+    const ok = gameState.mode && gameState.difficulty && gameState.p1Character &&
+               (gameState.mode !== 'pvp' || gameState.p2Character);
+    btn.disabled = !ok;
+  }
+};
+
+// ─── DOMContentLoaded ───────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof PROBLEM_PACK === 'undefined') { alert('pack.js를 찾을 수 없습니다!'); return; }
+  initStartScreen();
+
+  // 오프라인 모드 이벤트 (기존 game.js 그대로)
+  document.getElementById('attackBtn').addEventListener('click', checkAnswer);
+  document.getElementById('hintBtn').addEventListener('click', showAdvHint);
+  document.getElementById('quitBtn').addEventListener('click', () => {
+    if (confirm('메인으로 돌아갈까요?')) location.reload();
+  });
+  document.getElementById('restartBtn').addEventListener('click', () => location.reload());
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('adventureScreen').classList.contains('active'))
+      checkAnswer();
+  });
+
+  // 온라인 PvP 이벤트
+  initOnlinePvpEvents();
+
+  // 로비 뒤로가기
+  document.getElementById('lobbyBackBtn').addEventListener('click', () => showScreen('startScreen'));
+});
+</script>
+
+</body>
+</html>
