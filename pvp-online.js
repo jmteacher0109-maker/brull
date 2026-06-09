@@ -574,55 +574,93 @@ function useOnlineHint() {
   document.getElementById('onlineFeedback').textContent = `💡 ${q.hint || '문제를 다시 읽어보세요.'}`;
 }
 
-// ─── 랭킹 저장 ────────────────────────────────────────────────────────────
-async function saveWinToRanking() {
-  const nickname = onlinePvp.nickname;
-  if (!nickname) { console.warn('닉네임 없음, 랭킹 저장 스킵'); return; }
+// ─── 랭킹 저장 (온라인 PvP 승리 / 솔로 모드 공용) ──────────────────────────
+// type: 'pvp_win' | 'solo_clear' | 'solo_gameover'
+async function saveToRanking(nickname, type, score) {
+  if (!nickname || nickname === 'undefined') {
+    console.warn('닉네임 없음, 랭킹 저장 스킵'); return;
+  }
   const safeKey = nickname.replace(/[.#$[\]/]/g, '_');
   const ref = db.ref(`rankings/${safeKey}`);
   try {
     const snap = await ref.once('value');
-    const cur  = snap.val();
-    if (cur) {
-      await ref.update({ wins: (cur.wins || 0) + 1, lastWin: Date.now() });
-    } else {
-      await ref.set({ nickname: nickname, wins: 1, lastWin: Date.now() });
+    const cur  = snap.val() || { nickname, pvpWins: 0, soloBest: 0 };
+    const update = { nickname };
+    if (type === 'pvp_win') {
+      update.pvpWins = (cur.pvpWins || 0) + 1;
+      update.lastWin = Date.now();
     }
+    if (type === 'solo_clear') {
+      update.soloBest = Math.max(cur.soloBest || 0, score || 0);
+      update.lastPlay = Date.now();
+    }
+    await ref.update(update);
   } catch(e) { console.warn('랭킹 저장 실패', e); }
 }
 
-// ─── 랭킹 불러오기 ────────────────────────────────────────────────────────
-async function loadRanking() {
-  const list = document.getElementById('rankingList');
-  list.innerHTML = '<div class="rank-loading">불러오는 중...</div>';
+// ─── 랭킹 불러오기 (탭 전환) ─────────────────────────────────────────────
+let rankingTab = 'pvp'; // 'pvp' | 'solo'
+
+async function loadRanking(tab, myNick) {
+  rankingTab = tab || rankingTab;
+  // 솔로 결과 화면 / 온라인 결과 화면 둘 다 지원
+  const list = document.getElementById('rankingList') || document.getElementById('onlineRankingList');
+  const onlineList = document.getElementById('onlineRankingList');
+  const soloList   = document.getElementById('rankingList');
+  const targetList = soloList || onlineList;
+  if (!targetList) return;
+
+  // 화면에 보이는 리스트만 업데이트
+  [soloList, onlineList].forEach(el => {
+    if (el) el.innerHTML = '<div class="rank-loading">불러오는 중...</div>';
+  });
+
   try {
-    const snap = await db.ref('rankings').orderByChild('wins').limitToLast(10).once('value');
+    const snap = await db.ref('rankings').once('value');
     const rows = [];
     snap.forEach(child => rows.push(child.val()));
-    rows.sort((a, b) => b.wins - a.wins);
 
-    if (rows.length === 0) {
-      list.innerHTML = '<div class="rank-empty">아직 기록이 없어요! 첫 승리를 차지하세요 🏆</div>';
+    let sorted;
+    if (rankingTab === 'pvp') {
+      sorted = rows.filter(r => (r.pvpWins || 0) > 0)
+                   .sort((a,b) => (b.pvpWins||0) - (a.pvpWins||0))
+                   .slice(0, 10);
+    } else {
+      sorted = rows.filter(r => (r.soloBest || 0) > 0)
+                   .sort((a,b) => (b.soloBest||0) - (a.soloBest||0))
+                   .slice(0, 10);
+    }
+
+    if (sorted.length === 0) {
+      const emptyMsg = `<div class="rank-empty">${rankingTab === 'pvp' ? '아직 PvP 기록이 없어요!' : '아직 솔로 기록이 없어요!'}</div>`;
+      [soloList, onlineList].forEach(el => { if (el) el.innerHTML = emptyMsg; });
       return;
     }
 
     const medals = ['🥇','🥈','🥉'];
-    list.innerHTML = rows.map((r, i) => `
-      <div class="rank-row ${r.nickname === onlinePvp.nickname ? 'rank-me' : ''}">
-        <span class="rank-num">${medals[i] || (i + 1)}</span>
+    const currentNick = myNick || onlinePvp.nickname || '';
+    const html = sorted.map((r, i) => {
+      const val = rankingTab === 'pvp' ? `${r.pvpWins||0}승` : `${r.soloBest||0}점`;
+      return `<div class="rank-row ${r.nickname === currentNick ? 'rank-me' : ''}">
+        <span class="rank-num">${medals[i] || (i+1)}</span>
         <span class="rank-nick">${r.nickname}</span>
-        <span class="rank-wins">${r.wins}승</span>
-      </div>`).join('');
+        <span class="rank-wins">${val}</span>
+      </div>`;
+    }).join('');
+    [soloList, onlineList].forEach(el => { if (el) el.innerHTML = html; });
   } catch(e) {
-    list.innerHTML = '<div class="rank-empty">랭킹을 불러올 수 없어요.</div>';
+    [soloList, onlineList].forEach(el => {
+      if (el) el.innerHTML = '<div class="rank-empty">랭킹을 불러올 수 없어요.</div>';
+    });
   }
 }
 
 // ─── 결과 화면 ────────────────────────────────────────────────────────────
 async function showOnlineResult(result) {
-  // 승리면 랭킹 저장 먼저
-  if (result === 'win') {
-    await saveWinToRanking();
+  // 승리면 랭킹 저장 먼저 (nickname은 onlinePvp.nickname 또는 myInfo에서 보장)
+  const myNickname = onlinePvp.nickname || onlinePvp.myInfo?.nickname || '';
+  if (result === 'win' && myNickname) {
+    await saveToRanking(myNickname, 'pvp_win');
   }
 
   showScreen('onlineResultScreen');
@@ -649,7 +687,7 @@ async function showOnlineResult(result) {
   if (result === 'win') triggerWinEffect();
 
   // 랭킹 로드
-  loadRanking();
+  loadRanking('pvp', myNickname);
 
   // 방 정리
   if (onlinePvp.roomRef) onlinePvp.roomRef.onDisconnect().cancel();
@@ -719,7 +757,18 @@ function initOnlinePvpEvents() {
     showOnlineLobby();
   });
   document.getElementById('onlineResultHome').addEventListener('click', () => location.reload());
-  document.getElementById('rankingRefreshBtn').addEventListener('click', loadRanking);
+  document.getElementById('rankingRefreshBtn').addEventListener('click', () => {
+    const nick = onlinePvp.nickname || '';
+    loadRanking(rankingTab, nick);
+  });
+  // 온라인 결과 화면 탭 전환
+  document.querySelectorAll('#onlineResultScreen .rank-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#onlineResultScreen .rank-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      loadRanking(btn.dataset.tab, onlinePvp.nickname || '');
+    });
+  });
   document.getElementById('cancelMatchBtn').addEventListener('click', async () => {
     if (onlinePvp.roomId) {
       const diff = gameState.difficulty || 'easy';
