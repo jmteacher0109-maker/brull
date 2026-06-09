@@ -247,26 +247,49 @@
 
 <!-- ============= 온라인 PvP: 결과 화면 ============= -->
 <div id="onlineResultScreen" class="screen">
-  <div class="online-result-emoji" id="onlineResultEmoji">🏆</div>
-  <div class="online-result-title" id="onlineResultTitle">승리!</div>
-  <div class="online-result-sub"   id="onlineResultSub">대단해요!</div>
 
+  <!-- 승리 파티클 -->
+  <div id="winEffectContainer" class="win-effect-container"></div>
+
+  <!-- 결과 헤더 -->
+  <div class="result-header">
+    <div class="online-result-emoji" id="onlineResultEmoji">🏆</div>
+    <div class="online-result-title" id="onlineResultTitle">승리!</div>
+    <div class="online-result-sub"   id="onlineResultSub">대단해요!</div>
+  </div>
+
+  <!-- 점수판 -->
   <div class="online-score-board">
-    <div class="score-board-card">
-      <div class="score-board-label">🙋 나</div>
-      <div class="score-board-val" id="onlineResultMyScore">0</div>
+    <div class="score-board-card score-me">
+      <div class="score-board-nick" id="onlineResultMyNick">나</div>
+      <div class="score-board-val"  id="onlineResultMyScore">0</div>
+      <div class="score-board-label">정답 수</div>
     </div>
-    <div class="score-board-card">
-      <div class="score-board-label">🤺 상대</div>
-      <div class="score-board-val" id="onlineResultOppScore">0</div>
+    <div class="score-vs">VS</div>
+    <div class="score-board-card score-opp">
+      <div class="score-board-nick" id="onlineResultOppNick">상대방</div>
+      <div class="score-board-val"  id="onlineResultOppScore">0</div>
+      <div class="score-board-label">정답 수</div>
     </div>
   </div>
 
+  <!-- 랭킹 섹션 -->
+  <div class="ranking-section">
+    <div class="ranking-header">
+      <span class="ranking-title">🏅 명예의 전당 TOP 10</span>
+      <button class="ranking-refresh-btn" id="rankingRefreshBtn">↻</button>
+    </div>
+    <div class="ranking-list" id="rankingList">
+      <div class="rank-loading">불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- 버튼 -->
   <div class="online-result-btns">
     <button class="online-btn online-btn-primary"   id="onlineResultRematch" style="width:100%; padding:16px;">
       🔄 다시 매칭
     </button>
-    <button class="online-btn online-btn-secondary" id="onlineResultHome"    style="width:100%;">
+    <button class="online-btn online-btn-secondary" id="onlineResultHome" style="width:100%;">
       🏠 처음으로
     </button>
   </div>
