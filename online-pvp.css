@@ -457,3 +457,55 @@
   gap: 10px;
   width: 100%;
 }
+
+/* ─── 탭 버튼 ────────────────────────────────────────────────── */
+.rank-tab-btn {
+  background: rgba(255,255,255,.08);
+  border: 1.5px solid rgba(255,255,255,.16);
+  border-radius: 8px;
+  color: rgba(255,255,255,.5);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all .15s;
+  font-family: inherit;
+}
+.rank-tab-btn.active {
+  background: rgba(255,61,139,.2);
+  border-color: #ff3d8b;
+  color: #ff3d8b;
+}
+.rank-tab-btn:hover:not(.active) {
+  background: rgba(255,255,255,.14);
+  color: #fff;
+}
+
+/* ─── 솔로 랭킹 등록 ─────────────────────────────────────────── */
+.solo-rank-register {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(255,255,255,.05);
+  border: 1.5px solid rgba(255,255,255,.12);
+  border-radius: 16px;
+  padding: 16px;
+}
+.solo-rank-label {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffd93d;
+  margin-bottom: 10px;
+  text-align: center;
+}
+.solo-rank-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.solo-rank-feedback {
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 18px;
+}
