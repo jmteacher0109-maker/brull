@@ -113,7 +113,7 @@
   </div>
 </div>
 
-<!-- ============= 오프라인 결과 화면 ============= -->
+<!-- ============= 솔로 결과 화면 ============= -->
 <div id="resultScreen" class="screen">
   <div class="result-screen">
     <div class="result-emoji" id="resultEmoji">🏆</div>
@@ -133,7 +133,36 @@
       <div class="stat-value" id="finalMaxCombo">0</div>
     </div>
 
-    <button class="start-btn" id="restartBtn" style="margin-top: 30px;">다시 도전!</button>
+    <!-- 닉네임 입력 + 랭킹 등록 -->
+    <div class="solo-rank-register" id="soloRankRegister">
+      <p class="solo-rank-label">🏅 닉네임을 입력하고 랭킹에 등록하세요!</p>
+      <div class="solo-rank-input-row">
+        <input type="text" id="soloNickInput" class="lobby-nick-input"
+               placeholder="닉네임" maxlength="10" autocomplete="off"
+               style="flex:1; font-size:16px; padding:12px 14px;">
+        <button class="online-btn online-btn-primary" id="soloRankSubmitBtn"
+                style="padding:12px 18px; font-size:15px; white-space:nowrap;">
+          등록!
+        </button>
+      </div>
+      <div class="solo-rank-feedback" id="soloRankFeedback"></div>
+    </div>
+
+    <!-- 랭킹 섹션 -->
+    <div class="ranking-section" id="soloRankingSection" style="width:100%; max-width:400px;">
+      <div class="ranking-header">
+        <div style="display:flex; gap:6px;">
+          <button class="rank-tab-btn active" data-tab="solo">🗺️ 솔로</button>
+          <button class="rank-tab-btn" data-tab="pvp">⚔️ PvP</button>
+        </div>
+        <button class="ranking-refresh-btn" id="soloRankingRefreshBtn">↻</button>
+      </div>
+      <div class="ranking-list" id="rankingList">
+        <div class="rank-loading">불러오는 중...</div>
+      </div>
+    </div>
+
+    <button class="start-btn" id="restartBtn" style="margin-top: 8px;">다시 도전!</button>
   </div>
 </div>
 
@@ -276,10 +305,13 @@
   <!-- 랭킹 섹션 -->
   <div class="ranking-section">
     <div class="ranking-header">
-      <span class="ranking-title">🏅 명예의 전당 TOP 10</span>
+      <div style="display:flex; gap:6px;">
+        <button class="rank-tab-btn active" data-tab="pvp">⚔️ PvP</button>
+        <button class="rank-tab-btn" data-tab="solo">🗺️ 솔로</button>
+      </div>
       <button class="ranking-refresh-btn" id="rankingRefreshBtn">↻</button>
     </div>
-    <div class="ranking-list" id="rankingList">
+    <div class="ranking-list" id="onlineRankingList">
       <div class="rank-loading">불러오는 중...</div>
     </div>
   </div>
@@ -410,6 +442,34 @@ document.addEventListener('DOMContentLoaded', () => {
     if (confirm('메인으로 돌아갈까요?')) location.reload();
   });
   document.getElementById('restartBtn').addEventListener('click', () => location.reload());
+
+  // 솔로 랭킹 등록 버튼
+  document.getElementById('soloRankSubmitBtn').addEventListener('click', async () => {
+    const nick = document.getElementById('soloNickInput').value.trim();
+    const fb   = document.getElementById('soloRankFeedback');
+    if (!nick) { fb.textContent = '닉네임을 입력해주세요!'; fb.style.color = '#ff5050'; return; }
+    fb.textContent = '저장 중...'; fb.style.color = 'rgba(255,255,255,.5)';
+    const score = parseInt(document.getElementById('finalScore').textContent) || 0;
+    await saveToRanking(nick, 'solo_clear', score);
+    fb.textContent = '✅ 랭킹에 등록됐어요!'; fb.style.color = '#3ddc84';
+    document.getElementById('soloRankSubmitBtn').disabled = true;
+    loadRanking('solo', nick);
+  });
+  document.getElementById('soloNickInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('soloRankSubmitBtn').click();
+  });
+  document.getElementById('soloRankingRefreshBtn').addEventListener('click', () => {
+    const nick = document.getElementById('soloNickInput').value.trim();
+    loadRanking(rankingTab, nick);
+  });
+  document.querySelectorAll('#soloRankingSection .rank-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#soloRankingSection .rank-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const nick = document.getElementById('soloNickInput').value.trim();
+      loadRanking(btn.dataset.tab, nick);
+    });
+  });
   document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && document.getElementById('adventureScreen').classList.contains('active'))
       checkAnswer();
