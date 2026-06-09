@@ -289,8 +289,9 @@ function loadOnlineQuestion(idx) {
   if (idx >= onlinePvp.questions.length) return;
 
   onlinePvp.currentQuestionIdx = idx;
-  onlinePvp.answered = false;
-  onlinePvp.hintUsed = false;
+  onlinePvp.answered      = false;
+  onlinePvp.hintUsed      = false;
+  onlinePvp._waitingNext  = false;
 
   const q = onlinePvp.questions[idx];
 
@@ -373,30 +374,28 @@ async function submitOnlineAnswer(correct, elapsed) {
   onlinePvp.answered = true;
   stopOnlineTimer();
 
-  const myKey = onlinePvp.playerId;
+  const myKey  = onlinePvp.playerId;
+  const oppKey = myKey === 'player1' ? 'player2' : 'player1';
 
   if (correct) {
-    onlinePvp.myCorrect++;
-    document.getElementById('onlineFeedback').textContent = `✅ 정답! ${elapsed.toFixed(1)}초`;
+    document.getElementById('onlineFeedback').textContent = `✅ 정답! ${elapsed.toFixed(1)}초 — 상대 답변 대기 중...`;
     document.getElementById('onlineFeedback').className   = 'online-feedback correct';
   } else {
-    document.getElementById('onlineFeedback').textContent = '❌ 오답...';
+    document.getElementById('onlineFeedback').textContent = '❌ 오답... 상대 답변 대기 중';
     document.getElementById('onlineFeedback').className   = 'online-feedback wrong';
   }
 
-  updateOnlineBattleUI();
-
-  // Firebase에 내 결과 기록
+  // 내 답변 Firebase에 기록 (시간 포함)
   await onlinePvp.roomRef.update({
     [`${myKey}Answered`]: true,
     [`${myKey}Correct`]:  correct,
-    [`${myKey}Time`]:     elapsed,
-    [`${myKey}Score`]:    onlinePvp.myCorrect,
+    [`${myKey}Time`]:     correct ? elapsed : 9999,  // 오답은 9999초로 처리
   });
 
-  // 승리 조건 체크 (내가 먼저 맞힌 경우)
-  if (onlinePvp.myCorrect >= ONLINE_WIN_COUNT) {
-    await onlinePvp.roomRef.update({ status: 'finished', winner: myKey });
+  // 내가 정답이고 player1이면 타임아웃 내 상대 미응답 시 강제 진행
+  if (correct && onlinePvp.playerId === 'player1') {
+    const oppKey = 'player2';
+    scheduleNextQuestion(myKey, oppKey);
   }
 }
 
@@ -405,52 +404,138 @@ function handleRoomUpdate(room) {
   const myKey  = onlinePvp.playerId;
   const oppKey = myKey === 'player1' ? 'player2' : 'player1';
 
-  // 상대방 점수 동기화
-  const oppScore = room[`${oppKey}Score`] || 0;
-  if (oppScore !== onlinePvp.oppCorrect) {
-    onlinePvp.oppCorrect = oppScore;
-    updateOnlineBattleUI();
-  }
-
   // 게임 종료 처리
   if (room.status === 'finished') {
     stopOnlineTimer();
     clearOnlineListeners();
-    const iWin = room.winner === myKey;
-    showOnlineResult(iWin ? 'win' : 'lose');
+    const iWin  = room.winner === myKey;
+    const isDraw = room.winner === 'draw';
+    showOnlineResult(isDraw ? 'draw' : iWin ? 'win' : 'lose');
     return;
   }
 
-  // 둘 다 답했으면 다음 문제로
+  if (room.status !== 'playing') return;
+
+  // ── 점수 동기화 ──
+  const serverMyScore  = room[`${myKey}Score`]  || 0;
+  const serverOppScore = room[`${oppKey}Score`] || 0;
+  let uiDirty = false;
+  if (serverMyScore  !== onlinePvp.myCorrect)  { onlinePvp.myCorrect  = serverMyScore;  uiDirty = true; }
+  if (serverOppScore !== onlinePvp.oppCorrect) { onlinePvp.oppCorrect = serverOppScore; uiDirty = true; }
+  if (uiDirty) updateOnlineBattleUI();
+
+  // ── currentQ 증가 감지 → 다음 문제 로드 ──
+  const serverQ = room.currentQ ?? 0;
+  if (serverQ > onlinePvp.currentQuestionIdx) {
+    onlinePvp._waitingNext = false;
+    setTimeout(() => loadOnlineQuestion(serverQ), 900);
+    return;
+  }
+
   const myAnswered  = room[`${myKey}Answered`];
   const oppAnswered = room[`${oppKey}Answered`];
 
-  if (myAnswered && oppAnswered && onlinePvp.answered) {
-    const nextIdx = onlinePvp.currentQuestionIdx + 1;
-    if (nextIdx < ONLINE_TOTAL_Q) {
-      setTimeout(() => loadOnlineQuestion(nextIdx), 1500);
+  // ── 상대가 먼저 정답 → 내가 아직 안 답했으면 자동 패스 처리 ──
+  if (!myAnswered && oppAnswered && room[`${oppKey}Correct`] && !onlinePvp._waitingNext) {
+    onlinePvp._waitingNext = true;
+    document.getElementById('onlineFeedback').textContent = '😤 상대가 먼저 정답! 잠시 후 다음 문제...';
+    document.getElementById('onlineFeedback').className   = 'online-feedback wrong';
+    if (!onlinePvp.answered) {
+      onlinePvp.answered = true;
+      stopOnlineTimer();
+      onlinePvp.roomRef.update({
+        [`${myKey}Answered`]: true,
+        [`${myKey}Correct`]:  false,
+        [`${myKey}Time`]:     9999,
+      });
     }
-    // 5문제 다 풀었는데 아무도 3개 못 맞힌 경우 → 더 많이 맞힌 사람 승리
-    else if (nextIdx >= ONLINE_TOTAL_Q) {
-      determineWinnerByScore(room);
+    return;
+  }
+
+  // ── 둘 다 답했으면 player1이 최종 판정 ──
+  if (myAnswered && oppAnswered && !onlinePvp._waitingNext) {
+    onlinePvp._waitingNext = true;
+    if (onlinePvp.playerId === 'player1') {
+      resolveQuestion(room, myKey, oppKey);
     }
   }
 }
 
-async function determineWinnerByScore(room) {
-  const myKey  = onlinePvp.playerId;
-  const oppKey = myKey === 'player1' ? 'player2' : 'player1';
+// ★ 문제 판정: 더 빠른 정답자에게만 점수 (player1이 중재)
+async function resolveQuestion(room, myKey, oppKey) {
+  const myCorrect  = room[`${myKey}Correct`]  || false;
+  const oppCorrect = room[`${oppKey}Correct`] || false;
+  const myTime     = room[`${myKey}Time`]     ?? 9999;
+  const oppTime    = room[`${oppKey}Time`]    ?? 9999;
 
-  if (onlinePvp.playerId === 'player1') {
-    const myScore  = room[`${myKey}Score`] || 0;
-    const oppScore = room[`${oppKey}Score`] || 0;
-    let winner;
-    if (myScore > oppScore) winner = myKey;
-    else if (oppScore > myScore) winner = oppKey;
-    else winner = 'draw';
+  let newMyScore  = room[`${myKey}Score`]  || 0;
+  let newOppScore = room[`${oppKey}Score`] || 0;
 
-    await onlinePvp.roomRef.update({ status: 'finished', winner });
+  // 둘 다 정답이면 더 빠른 사람만 +1
+  // 한 명만 정답이면 그 사람만 +1
+  // 둘 다 오답이면 아무도 +1 안 함
+  if (myCorrect && oppCorrect) {
+    if (myTime < oppTime)       newMyScore++;
+    else if (oppTime < myTime)  newOppScore++;
+    else { newMyScore++; newOppScore++; } // 동시(거의 불가)
+  } else if (myCorrect) {
+    newMyScore++;
+  } else if (oppCorrect) {
+    newOppScore++;
   }
+
+  const nextIdx = (room.currentQ ?? 0) + 1;
+  const updates = {
+    [`${myKey}Score`]:  newMyScore,
+    [`${oppKey}Score`]: newOppScore,
+    [`${myKey}Answered`]:  false,
+    [`${oppKey}Answered`]: false,
+    [`${myKey}Time`]:      null,
+    [`${oppKey}Time`]:     null,
+    [`${myKey}Correct`]:   false,
+    [`${oppKey}Correct`]:  false,
+    currentQ: nextIdx,
+  };
+
+  // 승리 조건 체크
+  if (newMyScore >= ONLINE_WIN_COUNT) {
+    updates.status = 'finished';
+    updates.winner = myKey;
+  } else if (newOppScore >= ONLINE_WIN_COUNT) {
+    updates.status = 'finished';
+    updates.winner = oppKey;
+  } else if (nextIdx >= ONLINE_TOTAL_Q) {
+    // 5문제 소진
+    updates.status = 'finished';
+    if (newMyScore > newOppScore)       updates.winner = myKey;
+    else if (newOppScore > newMyScore)  updates.winner = oppKey;
+    else                                updates.winner = 'draw';
+  }
+
+  await onlinePvp.roomRef.update(updates);
+}
+
+// 다음 문제 전환 스케줄 (내가 먼저 정답 낸 경우 상대 응답 대기 후 강제 진행)
+function scheduleNextQuestion(myKey, oppKey) {
+  setTimeout(async () => {
+    if (onlinePvp.playerId !== 'player1') return;
+    const snap = await onlinePvp.roomRef.once('value');
+    const room = snap.val();
+    if (!room || room.status !== 'playing') return;
+    // 아직 판정 안 됐으면 지금 판정
+    if (!(room[`${myKey}Answered`] && room[`${oppKey}Answered`])) {
+      // 상대가 아직 안 답했으면 패스로 채워서 판정
+      await onlinePvp.roomRef.update({
+        [`${oppKey}Answered`]: true,
+        [`${oppKey}Correct`]:  false,
+        [`${oppKey}Time`]:     9999,
+      });
+    }
+    await resolveQuestion(
+      (await onlinePvp.roomRef.once('value')).val(),
+      myKey, oppKey
+    );
+  }, 2500);
 }
 
 // ─── UI 업데이트 ──────────────────────────────────────────────────────────
