@@ -454,30 +454,118 @@ function useOnlineHint() {
   document.getElementById('onlineFeedback').textContent = `💡 ${q.hint || '문제를 다시 읽어보세요.'}`;
 }
 
-// ─── 결과 화면 ────────────────────────────────────────────────────────────
-function showOnlineResult(result) {
-  showScreen('onlineResultScreen');
+// ─── 랭킹 저장 ────────────────────────────────────────────────────────────
+async function saveWinToRanking(nickname) {
+  const safeKey = nickname.replace(/[.#$[\]/]/g, '_');
+  const ref = db.ref(`rankings/${safeKey}`);
+  try {
+    const snap = await ref.once('value');
+    const cur  = snap.val();
+    if (cur) {
+      await ref.update({ wins: (cur.wins || 0) + 1, lastWin: Date.now() });
+    } else {
+      await ref.set({ nickname, wins: 1, lastWin: Date.now() });
+    }
+  } catch(e) { console.warn('랭킹 저장 실패', e); }
+}
 
-  let emoji, title, sub;
+// ─── 랭킹 불러오기 ────────────────────────────────────────────────────────
+async function loadRanking() {
+  const list = document.getElementById('rankingList');
+  list.innerHTML = '<div class="rank-loading">불러오는 중...</div>';
+  try {
+    const snap = await db.ref('rankings').orderByChild('wins').limitToLast(10).once('value');
+    const rows = [];
+    snap.forEach(child => rows.push(child.val()));
+    rows.sort((a, b) => b.wins - a.wins);
+
+    if (rows.length === 0) {
+      list.innerHTML = '<div class="rank-empty">아직 기록이 없어요! 첫 승리를 차지하세요 🏆</div>';
+      return;
+    }
+
+    const medals = ['🥇','🥈','🥉'];
+    list.innerHTML = rows.map((r, i) => `
+      <div class="rank-row ${r.nickname === onlinePvp.nickname ? 'rank-me' : ''}">
+        <span class="rank-num">${medals[i] || (i + 1)}</span>
+        <span class="rank-nick">${r.nickname}</span>
+        <span class="rank-wins">${r.wins}승</span>
+      </div>`).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="rank-empty">랭킹을 불러올 수 없어요.</div>';
+  }
+}
+
+// ─── 결과 화면 ────────────────────────────────────────────────────────────
+async function showOnlineResult(result) {
+  // 승리면 랭킹 저장 먼저
   if (result === 'win') {
-    emoji = '🏆'; title = '승리!'; sub = `${onlinePvp.myCorrect}문제 정답으로 승리했어요!`;
-  } else if (result === 'lose') {
-    emoji = '💀'; title = '패배...'; sub = `${onlinePvp.myCorrect}문제 정답. 다시 도전!`;
-  } else if (result === 'draw') {
-    emoji = '🤝'; title = '무승부!'; sub = `둘 다 ${onlinePvp.myCorrect}문제 정답!`;
-  } else {
-    emoji = '🔌'; title = '연결 끊김'; sub = '상대방 연결이 종료되었어요.';
+    await saveWinToRanking(onlinePvp.nickname);
   }
 
-  document.getElementById('onlineResultEmoji').textContent    = emoji;
-  document.getElementById('onlineResultTitle').textContent    = title;
-  document.getElementById('onlineResultSub').textContent      = sub;
+  showScreen('onlineResultScreen');
+
+  // 결과 유형별 콘텐츠
+  const configs = {
+    win:        { emoji:'🏆', title:'승리!',    titleClass:'result-win',  sub: winMessage() },
+    lose:       { emoji:'💀', title:'패배...',  titleClass:'result-lose', sub: `${onlinePvp.myCorrect}문제 정답. 다시 도전해봐!` },
+    draw:       { emoji:'🤝', title:'무승부!',  titleClass:'result-draw', sub: `둘 다 ${onlinePvp.myCorrect}문제! 팽팽한 대결이었어요.` },
+    disconnect: { emoji:'🔌', title:'연결 끊김', titleClass:'',           sub: '상대방 연결이 종료되었어요.' },
+  };
+  const cfg = configs[result] || configs.disconnect;
+
+  document.getElementById('onlineResultEmoji').textContent    = cfg.emoji;
+  document.getElementById('onlineResultTitle').textContent    = cfg.title;
+  document.getElementById('onlineResultTitle').className      = `online-result-title ${cfg.titleClass}`;
+  document.getElementById('onlineResultSub').textContent      = cfg.sub;
   document.getElementById('onlineResultMyScore').textContent  = onlinePvp.myCorrect;
   document.getElementById('onlineResultOppScore').textContent = onlinePvp.oppCorrect;
+  document.getElementById('onlineResultMyNick').textContent   = onlinePvp.nickname;
+  document.getElementById('onlineResultOppNick').textContent  = onlinePvp.oppInfo?.nickname || '상대방';
+
+  // 승리 이펙트
+  if (result === 'win') triggerWinEffect();
+
+  // 랭킹 로드
+  loadRanking();
 
   // 방 정리
   if (onlinePvp.roomRef) onlinePvp.roomRef.onDisconnect().cancel();
   onlinePvp._gameStarted = false;
+}
+
+// 승리 메시지 랜덤
+function winMessage() {
+  const msgs = [
+    '🔥 압도적인 실력이에요!',
+    '⚡ 번개처럼 빠른 풀이!',
+    '🌟 완벽한 승리!',
+    '👑 수학의 왕이 되었습니다!',
+    '💥 상대를 완전히 제압했어요!',
+    '🚀 로켓처럼 정확했어요!',
+  ];
+  return msgs[Math.floor(Math.random() * msgs.length)];
+}
+
+// 승리 파티클 이펙트
+function triggerWinEffect() {
+  const container = document.getElementById('winEffectContainer');
+  if (!container) return;
+  container.innerHTML = '';
+  const emojis = ['🏆','⭐','🌟','✨','🎉','🎊','💫','🔥'];
+  for (let i = 0; i < 22; i++) {
+    const el = document.createElement('div');
+    el.className = 'win-particle';
+    el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    el.style.cssText = `
+      left: ${Math.random() * 100}%;
+      animation-delay: ${Math.random() * 0.8}s;
+      animation-duration: ${1.2 + Math.random() * 1}s;
+      font-size: ${18 + Math.random() * 18}px;
+    `;
+    container.appendChild(el);
+  }
+  setTimeout(() => { container.innerHTML = ''; }, 3000);
 }
 
 // ─── 문제 선택 ────────────────────────────────────────────────────────────
@@ -509,6 +597,7 @@ function initOnlinePvpEvents() {
     showOnlineLobby();
   });
   document.getElementById('onlineResultHome').addEventListener('click', () => location.reload());
+  document.getElementById('rankingRefreshBtn').addEventListener('click', loadRanking);
   document.getElementById('cancelMatchBtn').addEventListener('click', async () => {
     if (onlinePvp.roomId) {
       await db.ref(`waiting/${onlinePvp.roomId}`).remove();
